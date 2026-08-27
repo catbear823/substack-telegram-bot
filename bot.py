@@ -14,6 +14,7 @@ from handlers import (
     ask_router,
     schedule_router,
     callback_router,
+    share_router,
 )
 
 
@@ -38,6 +39,7 @@ async def main():
     dp.include_router(ask_router)
     dp.include_router(schedule_router)
     dp.include_router(callback_router)
+    dp.include_router(share_router)
 
     logging.info("Bot starting...")
     await dp.start_polling(bot)
