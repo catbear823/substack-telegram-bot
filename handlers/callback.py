@@ -34,14 +34,13 @@ async def callback_help(callback: types.CallbackQuery):
         "1️⃣ 點擊「➕ 新增訂閱」新增 Substack 來源\n"
         "2️⃣ 點擊「🔄 抓取文章」查看最新內容\n"
         "3️⃣ 點擊「📝 最新摘要」查看 AI 摘要\n"
-        "4️⃣ 點擊「❓ 提問」針對文章內容提問\n\n"
+        "4️⃣ 點擊「📚 歷史文章」瀏覽歷史文章\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "**支援的網址格式：**\n"
         "• https://example.substack.com\n"
         "• https://substack.com/@username\n\n"
         "**指令格式：**\n"
         "• /add <url> - 新增訂閱\n"
-        "• /ask <問題> - 針對文章提問\n"
         "• /share - 分享訂閱列表\n"
     )
     await callback.message.edit_text(text, reply_markup=back_button(), parse_mode="Markdown")
