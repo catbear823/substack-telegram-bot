@@ -1,7 +1,7 @@
 import asyncio
 from openai import OpenAI
 
-from config import OPENROUTER_API_KEY, LLM_MODEL
+from config import OPENROUTER_API_KEY, LLM_MODEL, LLM_FALLBACK_MODEL
 
 client = OpenAI(
     api_key=OPENROUTER_API_KEY,
@@ -20,9 +20,9 @@ SYSTEM_PROMPT = """你是一個專業的 Substack 文章摘要助手。你的工
 - 引用文章時標明出處"""
 
 
-def _chat_sync(messages: list[dict], temperature: float = 0.3, max_tokens: int = 1024) -> str:
+def _chat_sync(messages: list[dict], model: str, temperature: float = 0.3, max_tokens: int = 1024) -> str:
     response = client.chat.completions.create(
-        model=LLM_MODEL,
+        model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -31,7 +31,10 @@ def _chat_sync(messages: list[dict], temperature: float = 0.3, max_tokens: int =
 
 
 async def _chat(messages: list[dict], temperature: float = 0.3, max_tokens: int = 1024) -> str:
-    return await asyncio.to_thread(_chat_sync, messages, temperature, max_tokens)
+    try:
+        return await asyncio.to_thread(_chat_sync, messages, LLM_MODEL, temperature, max_tokens)
+    except Exception:
+        return await asyncio.to_thread(_chat_sync, messages, LLM_FALLBACK_MODEL, temperature, max_tokens)
 
 
 async def summarize_article(title: str, content: str, max_length: int = 800) -> str:
