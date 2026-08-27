@@ -9,13 +9,14 @@ client = OpenAI(
 )
 
 SYSTEM_PROMPT = """你是一個專業的 Substack 文章摘要助手。你的工作是：
-1. 為文章生成清晰、詳細的中文摘要
+1. 為文章生成簡潔、有重點的中文摘要
 2. 根據已抓取的文章內容回答使用者問題
-3. 摘要應包含：主要觀點、關鍵論述、重要數據、結論
+3. 摘要應包含：核心觀點、關鍵數據、結論
 
 回答規則：
 - 使用繁體中文
-- 摘要要詳細但精練，包含要點
+- 摘要要簡潔有力，控制在 200-300 字
+- 使用條列式呈現要點
 - 如果問題與文章無關，誠實告知
 - 引用文章時標明出處"""
 
@@ -37,7 +38,7 @@ async def _chat(messages: list[dict], temperature: float = 0.3, max_tokens: int 
         return await asyncio.to_thread(_chat_sync, messages, LLM_FALLBACK_MODEL, temperature, max_tokens)
 
 
-async def summarize_article(title: str, content: str, max_length: int = 800) -> str:
+async def summarize_article(title: str, content: str, max_length: int = 300) -> str:
     if not content or len(content.strip()) < 50:
         return "文章內容不足，無法生成摘要。"
 
@@ -46,12 +47,12 @@ async def summarize_article(title: str, content: str, max_length: int = 800) -> 
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"請為以下文章生成一個詳細的中文摘要（約{max_length}字）：\n\n標題：{title}\n\n內容：\n{truncated}",
+            "content": f"請為以下文章生成一個簡潔的中文摘要（約{max_length}字，使用條列式）：\n\n標題：{title}\n\n內容：\n{truncated}",
         },
     ]
 
     try:
-        return await _chat(messages, temperature=0.3, max_tokens=1024)
+        return await _chat(messages, temperature=0.3, max_tokens=512)
     except Exception as e:
         return f"摘要生成失敗：{str(e)}"
 

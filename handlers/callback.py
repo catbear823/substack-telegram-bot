@@ -209,7 +209,10 @@ async def callback_view_article(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔗 閱讀全文", url=article.get("url", ""))],
-            [InlineKeyboardButton(text="🔙 返回文章列表", callback_data="menu_latest")],
+            [
+                InlineKeyboardButton(text="⬅️ 返回列表", callback_data="menu_latest"),
+                InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back"),
+            ],
         ]
     )
 

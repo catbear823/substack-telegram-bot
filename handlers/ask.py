@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -63,10 +63,17 @@ async def process_question(message: Message, question: str):
         f"💡 你可以繼續追問！"
     )
 
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❓ 繼續提問", callback_data="menu_ask")],
+            [InlineKeyboardButton(text="🏠 返回主選單", callback_data="menu_back")],
+        ]
+    )
+
     try:
-        await status_msg.edit_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+        await status_msg.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
-        await status_msg.edit_text(text, disable_web_page_preview=True)
+        await status_msg.edit_text(text, reply_markup=keyboard, disable_web_page_preview=True)
 
 
 @router.message(Command("ask"))
