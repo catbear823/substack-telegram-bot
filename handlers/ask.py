@@ -24,7 +24,7 @@ async def process_question(message: Message, question: str):
         )
         return
 
-    status_msg = await message.answer("🔄 正在抓取文章並分析...")
+    await message.answer("🔄 正在抓取文章並分析...")
 
     all_articles = []
     for feed in feeds:
@@ -37,7 +37,7 @@ async def process_question(message: Message, question: str):
             continue
 
     if not all_articles:
-        await status_msg.edit_text("📭 無法抓取到任何文章\n\n請稍後再試")
+        await message.answer("📭 無法抓取到任何文章\n\n請稍後再試")
         return
 
     relevant = all_articles[:10]
@@ -71,9 +71,9 @@ async def process_question(message: Message, question: str):
     )
 
     try:
-        await status_msg.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
+        await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
-        await status_msg.edit_text(text, reply_markup=keyboard, disable_web_page_preview=True)
+        await message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
 
 
 @router.message(Command("ask"))

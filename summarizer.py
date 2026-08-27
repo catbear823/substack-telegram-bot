@@ -28,14 +28,30 @@ def _chat_sync(messages: list[dict], model: str, temperature: float = 0.3, max_t
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content.strip()
+
+    if not content or "User Safety" in content or "safety" in content.lower():
+        return ""
+
+    return content
 
 
 async def _chat(messages: list[dict], temperature: float = 0.3, max_tokens: int = 1024) -> str:
     try:
-        return await asyncio.to_thread(_chat_sync, messages, LLM_MODEL, temperature, max_tokens)
+        result = await asyncio.to_thread(_chat_sync, messages, LLM_MODEL, temperature, max_tokens)
+        if result:
+            return result
     except Exception:
-        return await asyncio.to_thread(_chat_sync, messages, LLM_FALLBACK_MODEL, temperature, max_tokens)
+        pass
+
+    try:
+        result = await asyncio.to_thread(_chat_sync, messages, LLM_FALLBACK_MODEL, temperature, max_tokens)
+        if result:
+            return result
+    except Exception:
+        pass
+
+    return ""
 
 
 async def summarize_article(title: str, content: str, max_length: int = 300) -> str:
@@ -51,10 +67,10 @@ async def summarize_article(title: str, content: str, max_length: int = 300) -> 
         },
     ]
 
-    try:
-        return await _chat(messages, temperature=0.3, max_tokens=512)
-    except Exception as e:
-        return f"摘要生成失敗：{str(e)}"
+    result = await _chat(messages, temperature=0.3, max_tokens=512)
+    if not result:
+        return f"⚠️ 無法生成摘要（AI 服務暫時不可用）\n\n📄 標題：{title}\n🔗 請點擊「閱讀全文」查看原文"
+    return result
 
 
 async def answer_question(
@@ -96,10 +112,10 @@ async def answer_question(
         },
     ]
 
-    try:
-        return await _chat(messages, temperature=0.5, max_tokens=1500)
-    except Exception as e:
-        return f"回答生成失敗：{str(e)}"
+    result = await _chat(messages, temperature=0.5, max_tokens=1500)
+    if not result:
+        return "⚠️ 無法生成回答（AI 服務暫時不可用），請稍後再試"
+    return result
 
 
 async def generate_digest(articles: list[dict]) -> str:

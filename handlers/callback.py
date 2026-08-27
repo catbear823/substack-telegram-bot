@@ -180,13 +180,13 @@ async def callback_view_article(callback: types.CallbackQuery):
     all_articles.sort(key=lambda x: x.get("published_at", ""), reverse=True)
 
     if article_index >= len(all_articles):
-        await callback.message.edit_text("⚠️ 找不到這篇文章", reply_markup=back_button())
+        await callback.message.answer("⚠️ 找不到這篇文章")
         await callback.answer()
         return
 
     article = all_articles[article_index]
 
-    await callback.message.edit_text("🔄 正在生成摘要...", reply_markup=back_button())
+    await callback.message.answer("🔄 正在生成摘要...")
     await callback.answer()
 
     content = article.get("content", "")
@@ -209,17 +209,15 @@ async def callback_view_article(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔗 閱讀全文", url=article.get("url", ""))],
-            [
-                InlineKeyboardButton(text="⬅️ 返回列表", callback_data="menu_latest"),
-                InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back"),
-            ],
+            [InlineKeyboardButton(text="🔄 查看其他文章", callback_data="menu_latest")],
+            [InlineKeyboardButton(text="🏠 返回主選單", callback_data="menu_back")],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
+        await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
-        await callback.message.edit_text(text, reply_markup=keyboard, disable_web_page_preview=True)
+        await callback.message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
 
 
 @router.callback_query(F.data == "menu_ask")
@@ -355,14 +353,14 @@ async def callback_history_view(callback: types.CallbackQuery):
 
     feeds = await db.get_feeds(callback.message.chat.id)
     if feed_index >= len(feeds):
-        await callback.message.edit_text("⚠️ 來源不存在", reply_markup=back_button())
+        await callback.message.answer("⚠️ 來源不存在")
         await callback.answer()
         return
 
     feed = feeds[feed_index]
     feed_url = feed["url"]
 
-    await callback.message.edit_text("🔄 正在抓取文章內容...", reply_markup=back_button())
+    await callback.message.answer("🔄 正在抓取文章內容...")
     await callback.answer()
 
     try:
@@ -371,7 +369,7 @@ async def callback_history_view(callback: types.CallbackQuery):
         articles = []
 
     if article_index >= len(articles):
-        await callback.message.edit_text("⚠️ 找不到這篇文章", reply_markup=back_button())
+        await callback.message.answer("⚠️ 找不到這篇文章")
         return
 
     article = articles[article_index]
@@ -395,14 +393,12 @@ async def callback_history_view(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔗 閱讀全文", url=article.get("url", ""))],
-            [
-                InlineKeyboardButton(text="⬅️ 返回列表", callback_data=f"history_feed_{feed_index}"),
-                InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back"),
-            ],
+            [InlineKeyboardButton(text="🔄 查看其他文章", callback_data=f"history_feed_{feed_index}")],
+            [InlineKeyboardButton(text="🏠 返回主選單", callback_data="menu_back")],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
+        await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
-        await callback.message.edit_text(text, reply_markup=keyboard, disable_web_page_preview=True)
+        await callback.message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
