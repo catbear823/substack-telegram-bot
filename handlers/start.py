@@ -15,13 +15,14 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📝 最新摘要", callback_data="menu_latest"),
-            InlineKeyboardButton(text="❓ 提問", callback_data="menu_ask"),
+            InlineKeyboardButton(text="📚 歷史文章", callback_data="menu_history"),
         ],
         [
-            InlineKeyboardButton(text="➕ 新增訂閱", callback_data="menu_add"),
+            InlineKeyboardButton(text="❓ 提問", callback_data="menu_ask"),
             InlineKeyboardButton(text="⏰ 定時推送", callback_data="menu_schedule"),
         ],
         [
+            InlineKeyboardButton(text="➕ 新增訂閱", callback_data="menu_add"),
             InlineKeyboardButton(text="📖 使用說明", callback_data="menu_help"),
         ],
     ]

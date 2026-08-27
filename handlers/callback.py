@@ -257,3 +257,212 @@ async def callback_schedule(callback: types.CallbackQuery):
     )
     await callback.message.edit_text(text, reply_markup=back_button(), parse_mode="Markdown")
     await callback.answer()
+
+
+@router.callback_query(F.data == "menu_history")
+async def callback_history(callback: types.CallbackQuery):
+    feeds = await db.get_feeds(callback.message.chat.id)
+    if not feeds:
+        text = "📭 目前沒有訂閱任何來源\n\n點擊「➕ 新增訂閱」新增你的第一個 Substack 訂閱"
+        await callback.message.edit_text(text, reply_markup=back_button())
+        await callback.answer()
+        return
+
+    lines = ["📚 **歷史文章**\n\n選擇一個來源查看歷史文章：\n"]
+    buttons = []
+    for i, feed in enumerate(feeds):
+        count = await db.get_articles_by_feed_count(callback.message.chat.id, feed["url"])
+        title = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
+        lines.append(f"{i+1}. {title} ({count} 篇)")
+        buttons.append(
+            [InlineKeyboardButton(
+                text=f"📰 {title} ({count})",
+                callback_data=f"history_feed_{i}"
+            )]
+        )
+
+    buttons.append([InlineKeyboardButton(text="🔙 返回主選單", callback_data="menu_back")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("history_feed_"))
+async def callback_history_feed(callback: types.CallbackQuery):
+    feed_index = int(callback.data.split("_")[2])
+    feeds = await db.get_feeds(callback.message.chat.id)
+
+    if feed_index >= len(feeds):
+        await callback.message.edit_text("⚠️ 來源不存在", reply_markup=back_button())
+        await callback.answer()
+        return
+
+    feed = feeds[feed_index]
+    feed_url = feed["url"]
+    page = 0
+    per_page = 5
+
+    articles = await db.get_articles_by_feed(callback.message.chat.id, feed_url, limit=per_page, offset=page * per_page)
+    total = await db.get_articles_by_feed_count(callback.message.chat.id, feed_url)
+    title = feed.get("title") or feed_url.split("//")[-1].split(".")[0]
+
+    if not articles:
+        text = f"📭 **{title}**\n\n目前沒有已抓取的文章"
+        await callback.message.edit_text(text, reply_markup=back_button(), parse_mode="Markdown")
+        await callback.answer()
+        return
+
+    lines = [f"📚 **{title}** （共 {total} 篇）\n"]
+    buttons = []
+    for article in articles:
+        date = article.get("published_at", "")[:10] if article.get("published_at") else ""
+        summary_preview = ""
+        if article.get("summary"):
+            summary_preview = f"\n   📝 {article['summary'][:60]}..."
+        lines.append(f"🆔 `{article['id']}` - {article['title']}")
+        if date:
+            lines.append(f"   📅 {date}{summary_preview}\n")
+        else:
+            lines.append(f"   {summary_preview}\n")
+        buttons.append(
+            [InlineKeyboardButton(
+                text=f"📄 {article['title'][:35]}...",
+                callback_data=f"history_article_{article['id']}"
+            )]
+        )
+
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(text="⬅️ 上一頁", callback_data=f"history_page_{feed_index}_{page-1}")
+        )
+    if total > (page + 1) * per_page:
+        nav_buttons.append(
+            InlineKeyboardButton(text="➡️ 下一頁", callback_data=f"history_page_{feed_index}_{page+1}")
+        )
+    if nav_buttons:
+        buttons.append(nav_buttons)
+
+    buttons.append([InlineKeyboardButton(text="🔙 返回來源列表", callback_data="menu_history")])
+    buttons.append([InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("history_page_"))
+async def callback_history_page(callback: types.CallbackQuery):
+    parts = callback.data.split("_")
+    feed_index = int(parts[2])
+    page = int(parts[3])
+
+    feeds = await db.get_feeds(callback.message.chat.id)
+    if feed_index >= len(feeds):
+        await callback.message.edit_text("⚠️ 來源不存在", reply_markup=back_button())
+        await callback.answer()
+        return
+
+    feed = feeds[feed_index]
+    feed_url = feed["url"]
+    per_page = 5
+
+    articles = await db.get_articles_by_feed(callback.message.chat.id, feed_url, limit=per_page, offset=page * per_page)
+    total = await db.get_articles_by_feed_count(callback.message.chat.id, feed_url)
+    title = feed.get("title") or feed_url.split("//")[-1].split(".")[0]
+
+    lines = [f"📚 **{title}** （共 {total} 篇，第 {page+1} 頁）\n"]
+    buttons = []
+    for article in articles:
+        date = article.get("published_at", "")[:10] if article.get("published_at") else ""
+        summary_preview = ""
+        if article.get("summary"):
+            summary_preview = f"\n   📝 {article['summary'][:60]}..."
+        lines.append(f"🆔 `{article['id']}` - {article['title']}")
+        if date:
+            lines.append(f"   📅 {date}{summary_preview}\n")
+        else:
+            lines.append(f"   {summary_preview}\n")
+        buttons.append(
+            [InlineKeyboardButton(
+                text=f"📄 {article['title'][:35]}...",
+                callback_data=f"history_article_{article['id']}"
+            )]
+        )
+
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(text="⬅️ 上一頁", callback_data=f"history_page_{feed_index}_{page-1}")
+        )
+    if total > (page + 1) * per_page:
+        nav_buttons.append(
+            InlineKeyboardButton(text="➡️ 下一頁", callback_data=f"history_page_{feed_index}_{page+1}")
+        )
+    if nav_buttons:
+        buttons.append(nav_buttons)
+
+    buttons.append([InlineKeyboardButton(text="🔙 返回來源列表", callback_data="menu_history")])
+    buttons.append([InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("history_article_"))
+async def callback_history_article(callback: types.CallbackQuery):
+    article_id = int(callback.data.split("_")[2])
+    article = await db.get_article_by_id(article_id)
+
+    if not article:
+        await callback.message.edit_text("⚠️ 找不到這篇文章", reply_markup=back_button())
+        await callback.answer()
+        return
+
+    if article.get("summary"):
+        summary = article["summary"]
+    else:
+        await callback.message.edit_text("🔄 正在生成摘要...", reply_markup=back_button())
+        await callback.answer()
+        content = article.get("content", "")
+        if not content:
+            await callback.message.edit_text("⚠️ 這篇文章沒有可用的內容", reply_markup=back_button())
+            return
+        summary = await summarize_article(article["title"], content)
+        await db.update_article_summary(article_id, summary)
+
+    text = (
+        f"📄 **{article['title']}**\n\n"
+        f"👤 作者：{article.get('author', 'Unknown')}\n"
+        f"📅 發布：{article.get('published_at', 'Unknown')}\n"
+        f"🔗 連結：{article.get('url', '')}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📝 **AI 摘要：**\n\n"
+        f"{summary}"
+    )
+
+    feed_url = article.get("feed_url", "")
+    feeds = await db.get_feeds(callback.message.chat.id)
+    feed_index = 0
+    for i, f in enumerate(feeds):
+        if f["url"] == feed_url:
+            feed_index = i
+            break
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❓ 針對此文提問", callback_data=f"ask_article_{article_id}")],
+            [
+                InlineKeyboardButton(text="⬅️ 返回列表", callback_data=f"history_feed_{feed_index}"),
+                InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back"),
+            ],
+        ]
+    )
+
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
+    except Exception:
+        await callback.message.edit_text(text, reply_markup=keyboard, disable_web_page_preview=True)
+    await callback.answer()

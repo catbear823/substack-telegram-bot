@@ -207,3 +207,36 @@ async def get_article_count(chat_id: int) -> int:
         )
         row = await cursor.fetchone()
         return row[0] if row else 0
+
+
+async def get_articles_by_feed(chat_id: int, feed_url: str, limit: int = 20, offset: int = 0) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM articles 
+               WHERE chat_id = ? AND feed_url = ? 
+               ORDER BY published_at DESC LIMIT ? OFFSET ?""",
+            (chat_id, feed_url, limit, offset),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def get_articles_by_feed_count(chat_id: int, feed_url: str) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM articles WHERE chat_id = ? AND feed_url = ?",
+            (chat_id, feed_url),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+
+async def get_feed_title(chat_id: int, feed_url: str) -> str:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT title FROM feeds WHERE chat_id = ? AND url = ?",
+            (chat_id, feed_url),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else feed_url.split("//")[-1].split(".")[0]
