@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 import database as db
 from substack_fetcher import fetch_feed
 from summarizer import answer_question
+from utils import send_long_message
 
 router = Router()
 
@@ -70,10 +71,7 @@ async def process_question(message: Message, question: str):
         ]
     )
 
-    try:
-        await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
-    except Exception:
-        await message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
+    await send_long_message(message, text, reply_markup=keyboard)
 
 
 @router.message(Command("ask"))

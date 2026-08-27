@@ -82,20 +82,20 @@ async def _chat(messages: list[dict], temperature: float = 0.3, max_tokens: int 
     return ""
 
 
-async def summarize_article(title: str, content: str, max_length: int = 300) -> str:
+async def summarize_article(title: str, content: str, max_length: int = 1000) -> str:
     if not content or len(content.strip()) < 50:
         return "文章內容不足，無法生成摘要。"
 
-    truncated = content[:12000]
+    truncated = content[:15000]
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"請為以下文章生成一個簡潔的中文摘要（約{max_length}字，使用條列式）：\n\n標題：{title}\n\n內容：\n{truncated}",
+            "content": f"請為以下文章生成一個詳細的中文摘要（約{max_length}字，使用條列式，包含主要觀點、關鍵數據、結論）：\n\n標題：{title}\n\n內容：\n{truncated}",
         },
     ]
 
-    result = await _chat(messages, temperature=0.3, max_tokens=512)
+    result = await _chat(messages, temperature=0.3, max_tokens=2048)
     if not result:
         return f"⚠️ 無法生成摘要（AI 服務暫時不可用）\n\n📄 標題：{title}\n🔗 請點擊「閱讀全文」查看原文"
     return result

@@ -8,6 +8,7 @@ from summarizer import summarize_article, answer_question
 from handlers.start import get_main_menu_keyboard
 from handlers.feeds import AddFeedState
 from handlers.ask import AskState
+from utils import send_long_message
 
 router = Router()
 
@@ -214,10 +215,7 @@ async def callback_view_article(callback: types.CallbackQuery):
         ]
     )
 
-    try:
-        await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
-    except Exception:
-        await callback.message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
+    await send_long_message(callback.message, text, reply_markup=keyboard)
 
 
 @router.callback_query(F.data == "menu_ask")
@@ -398,7 +396,4 @@ async def callback_history_view(callback: types.CallbackQuery):
         ]
     )
 
-    try:
-        await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
-    except Exception:
-        await callback.message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
+    await send_long_message(callback.message, text, reply_markup=keyboard)
