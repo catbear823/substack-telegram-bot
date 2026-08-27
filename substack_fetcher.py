@@ -48,7 +48,7 @@ def clean_html(html_content: str) -> str:
     return text[:15000]
 
 
-async def fetch_feed(feed_url: str) -> Optional[dict]:
+async def fetch_feed(feed_url: str) -> list[dict]:
     normalized = normalize_url(feed_url)
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -61,34 +61,18 @@ async def fetch_feed(feed_url: str) -> Optional[dict]:
             content = response.text
     except Exception as e:
         print(f"Error fetching {normalized}: {e}")
-        return None
+        return []
 
     feed = feedparser.parse(content)
     if feed.bozo and not feed.entries:
         print(f"Error parsing feed {normalized}: {feed.bozo_exception}")
-        return None
-
-    return {
-        "title": feed.feed.get("title", ""),
-        "url": normalized.replace("/feed", ""),
-        "entries": feed.entries,
-    }
-
-
-async def fetch_recent_posts(
-    feed_url: str, chat_id: int, limit: int = 10
-) -> list[SubstackPost]:
-    feed_data = await fetch_feed(feed_url)
-    if not feed_data:
         return []
 
+    base_url = normalized.replace("/feed", "")
     posts = []
-    for entry in feed_data["entries"][:limit]:
+    for entry in feed.entries[:10]:
         post_url = extract_post_url(entry)
         if not post_url:
-            continue
-
-        if await db.article_exists(post_url):
             continue
 
         published = ""
@@ -104,53 +88,28 @@ async def fetch_recent_posts(
         elif hasattr(entry, "summary"):
             content = clean_html(entry.summary)
 
-        post = SubstackPost(
-            title=entry.get("title", "Untitled"),
-            url=post_url,
-            author=entry.get("author", feed_data["title"]),
-            published_at=published,
-            content=content,
-            feed_url=feed_data["url"],
-        )
+        post = {
+            "title": entry.get("title", "Untitled"),
+            "url": post_url,
+            "author": entry.get("author", feed.feed.get("title", "Unknown")),
+            "published_at": published,
+            "content": content,
+            "feed_url": base_url,
+        }
         posts.append(post)
 
     return posts
 
 
-async def fetch_and_store(feed_url: str, chat_id: int) -> list[dict]:
-    posts = await fetch_recent_posts(feed_url, chat_id)
-    stored = []
-    for post in posts:
-        article_id = await db.add_article(
-            chat_id=chat_id,
-            feed_url=post.feed_url,
-            title=post.title,
-            url=post.url,
-            author=post.author,
-            published_at=post.published_at,
-            content=post.content,
-        )
-        if article_id:
-            stored.append(
-                {
-                    "id": article_id,
-                    "title": post.title,
-                    "url": post.url,
-                    "author": post.author,
-                    "published_at": post.published_at,
-                }
-            )
-    return stored
-
-
 async def fetch_all_feeds(chat_id: int) -> dict:
     feeds = await db.get_feeds(chat_id)
-    results = {"total_new": 0, "articles": [], "errors": []}
+    results = {"articles": [], "errors": []}
 
     for feed in feeds:
         try:
-            articles = await fetch_and_store(feed["url"], chat_id)
-            results["total_new"] += len(articles)
+            articles = await fetch_feed(feed["url"])
+            for article in articles:
+                article["feed_title"] = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
             results["articles"].extend(articles)
         except Exception as e:
             results["errors"].append({"url": feed["url"], "error": str(e)})

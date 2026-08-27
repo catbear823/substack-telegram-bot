@@ -106,10 +106,9 @@ async def cmd_list(message: types.Message):
 
     lines = ["📚 **你的訂閱列表：**\n"]
     for i, feed in enumerate(feeds, 1):
-        all_articles = await db.get_articles(message.chat.id, limit=1000)
-        article_count = sum(1 for a in all_articles if a["feed_url"] == feed["url"])
-        lines.append(f"{i}. {feed['url']}")
-        lines.append(f"   📄 已抓取 {article_count} 篇文章\n")
+        title = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
+        lines.append(f"{i}. {title}")
+        lines.append(f"   🔗 {feed['url']}\n")
 
     lines.append(f"共 {len(feeds)} 個來源")
     await message.answer("\n".join(lines), parse_mode="Markdown")

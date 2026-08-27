@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import database as db
-from handlers.start import get_main_menu_keyboard
+from substack_fetcher import fetch_feed
 
 router = Router()
 
@@ -17,6 +17,15 @@ def back_button() -> InlineKeyboardMarkup:
 
 @router.message(Command("share"))
 async def cmd_share(message: types.Message):
+    args = message.text.split(maxsplit=1)
+    max_uses = 0
+
+    if len(args) >= 2:
+        try:
+            max_uses = int(args[1].strip())
+        except ValueError:
+            pass
+
     existing = await db.get_shared_feeds(message.chat.id)
     if existing:
         share_code = existing["share_code"]
@@ -27,7 +36,7 @@ async def cmd_share(message: types.Message):
         text = (
             "🔗 **你的分享連結**\n\n"
             f"連結：{link}\n\n"
-            "分享此連結給朋友，他們可以查看你的訂閱列表和文章摘要\n\n"
+            "分享此連結給朋友，他們可以查看你的訂閱列表\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "💡 點擊「🔄 重新產生」可重新整理分享連結\n"
             "💡 點擊「❌ 停止分享」可關閉分享功能"
@@ -42,16 +51,18 @@ async def cmd_share(message: types.Message):
         )
     else:
         share_code = secrets.token_urlsafe(8)
-        await db.create_shared_feed(message.chat.id, share_code)
+        await db.create_shared_feed(message.chat.id, share_code, max_uses)
 
         bot_info = await message.bot.get_me()
         bot_username = bot_info.username
         link = f"https://t.me/{bot_username}?start={share_code}"
 
+        uses_text = f"（僅限 {max_uses} 次使用）" if max_uses > 0 else "（不限次數）"
         text = (
             "🔗 **分享功能已啟用**\n\n"
             f"你的分享連結：\n{link}\n\n"
-            "分享此連結給朋友，他們可以查看你的訂閱列表和文章摘要\n\n"
+            f"使用次數限制：{uses_text}\n\n"
+            "分享此連結給朋友，他們可以查看你的訂閱列表\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "💡 朋友點擊連結後，即可查看你的訂閱"
         )
@@ -79,7 +90,7 @@ async def callback_menu_share(callback: types.CallbackQuery):
         text = (
             "🔗 **你的分享連結**\n\n"
             f"連結：{link}\n\n"
-            "分享此連結給朋友，他們可以查看你的訂閱列表和文章摘要\n\n"
+            "分享此連結給朋友，他們可以查看你的訂閱列表\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "💡 點擊「🔄 重新產生」可重新整理分享連結\n"
             "💡 點擊「❌ 停止分享」可關閉分享功能"
@@ -103,7 +114,7 @@ async def callback_menu_share(callback: types.CallbackQuery):
         text = (
             "🔗 **分享功能已啟用**\n\n"
             f"你的分享連結：\n{link}\n\n"
-            "分享此連結給朋友，他們可以查看你的訂閱列表和文章摘要\n\n"
+            "分享此連結給朋友，他們可以查看你的訂閱列表\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "💡 朋友點擊連結後，即可查看你的訂閱"
         )
@@ -122,18 +133,22 @@ async def callback_menu_share(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "share_regenerate")
 async def callback_share_regenerate(callback: types.CallbackQuery):
+    existing = await db.get_shared_feeds(callback.message.chat.id)
+    max_uses = existing.get("max_uses", 0) if existing else 0
+
     await db.remove_shared_feed(callback.message.chat.id)
     share_code = secrets.token_urlsafe(8)
-    await db.create_shared_feed(callback.message.chat.id, share_code)
+    await db.create_shared_feed(callback.message.chat.id, share_code, max_uses)
 
     bot_info = await callback.bot.get_me()
     bot_username = bot_info.username
     link = f"https://t.me/{bot_username}?start={share_code}"
 
+    uses_text = f"（僅限 {max_uses} 次使用）" if max_uses > 0 else "（不限次數）"
     text = (
         "✅ **分享連結已重新產生**\n\n"
         f"新的分享連結：\n{link}\n\n"
-        "分享此連結給朋友，他們可以查看你的訂閱列表和文章摘要"
+        f"使用次數限制：{uses_text}"
     )
 
     keyboard = InlineKeyboardMarkup(
@@ -176,7 +191,7 @@ async def cmd_view(message: types.Message):
     owner_chat_id = await db.get_owner_by_share_code(share_code)
 
     if not owner_chat_id:
-        await message.answer("⚠️ 找不到此分享代碼，請確認代碼是否正確")
+        await message.answer("⚠️ 此分享連結已過期或不存在")
         return
 
     if owner_chat_id == message.chat.id:
@@ -191,12 +206,11 @@ async def cmd_view(message: types.Message):
     lines = ["📚 **對方的訂閱列表：**\n"]
     buttons = []
     for i, feed in enumerate(feeds):
-        count = await db.get_articles_by_feed_count(owner_chat_id, feed["url"])
         title = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
-        lines.append(f"{i+1}. {title} ({count} 篇)")
+        lines.append(f"{i+1}. {title}")
         buttons.append(
             [InlineKeyboardButton(
-                text=f"📰 {title} ({count})",
+                text=f"📰 {title}",
                 callback_data=f"shared_feed_{owner_chat_id}_{i}"
             )]
         )
@@ -221,56 +235,92 @@ async def callback_shared_feed(callback: types.CallbackQuery):
 
     feed = feeds[feed_index]
     feed_url = feed["url"]
-    page = 0
-    per_page = 5
-
-    articles = await db.get_articles_by_feed(owner_chat_id, feed_url, limit=per_page, offset=page * per_page)
-    total = await db.get_articles_by_feed_count(owner_chat_id, feed_url)
     title = feed.get("title") or feed_url.split("//")[-1].split(".")[0]
 
+    await callback.message.edit_text(f"🔄 正在抓取 **{title}** 的最新文章...", reply_markup=back_button(), parse_mode="Markdown")
+    await callback.answer()
+
+    try:
+        articles = await fetch_feed(feed_url)
+    except Exception:
+        articles = []
+
     if not articles:
-        text = f"📭 **{title}**\n\n此來源目前沒有已抓取的文章"
+        text = f"📭 **{title}**\n\n此來源目前沒有文章"
         await callback.message.edit_text(text, reply_markup=back_button(), parse_mode="Markdown")
-        await callback.answer()
         return
 
-    lines = [f"📚 **{title}** （共 {total} 篇）\n"]
+    lines = [f"📚 **{title}** （最新 {min(len(articles), 10)} 篇）\n"]
     buttons = []
-    for article in articles:
+    for i, article in enumerate(articles[:10]):
         date = article.get("published_at", "")[:10] if article.get("published_at") else ""
-        summary_preview = ""
-        if article.get("summary"):
-            summary_preview = f"\n   📝 {article['summary'][:60]}..."
-        lines.append(f"🆔 `{article['id']}` - {article['title']}")
+        lines.append(f"{i+1}. {article['title']}")
         if date:
-            lines.append(f"   📅 {date}{summary_preview}\n")
-        else:
-            lines.append(f"   {summary_preview}\n")
+            lines.append(f"   📅 {date}")
         buttons.append(
             [InlineKeyboardButton(
                 text=f"📄 {article['title'][:35]}...",
-                callback_data=f"shared_article_{owner_chat_id}_{article['id']}"
+                callback_data=f"shared_view_{owner_chat_id}_{feed_index}_{i}"
             )]
         )
-
-    nav_buttons = []
-    if page > 0:
-        nav_buttons.append(
-            InlineKeyboardButton(text="⬅️ 上一頁", callback_data=f"shared_page_{owner_chat_id}_{feed_index}_{page-1}")
-        )
-    if total > (page + 1) * per_page:
-        nav_buttons.append(
-            InlineKeyboardButton(text="➡️ 下一頁", callback_data=f"shared_page_{owner_chat_id}_{feed_index}_{page+1}")
-        )
-    if nav_buttons:
-        buttons.append(nav_buttons)
 
     buttons.append([InlineKeyboardButton(text="🔙 返回列表", callback_data=f"shared_feeds_{owner_chat_id}")])
     buttons.append([InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await callback.message.edit_text("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("shared_view_"))
+async def callback_shared_view(callback: types.CallbackQuery):
+    parts = callback.data.split("_")
+    owner_chat_id = int(parts[2])
+    feed_index = int(parts[3])
+    article_index = int(parts[4])
+
+    feeds = await db.get_feeds(owner_chat_id)
+    if feed_index >= len(feeds):
+        await callback.message.edit_text("⚠️ 來源不存在", reply_markup=back_button())
+        await callback.answer()
+        return
+
+    feed = feeds[feed_index]
+    feed_url = feed["url"]
+
+    await callback.message.edit_text("🔄 正在抓取文章內容...", reply_markup=back_button())
     await callback.answer()
+
+    try:
+        articles = await fetch_feed(feed_url)
+    except Exception:
+        articles = []
+
+    if article_index >= len(articles):
+        await callback.message.edit_text("⚠️ 找不到這篇文章", reply_markup=back_button())
+        return
+
+    article = articles[article_index]
+
+    text = (
+        f"📄 **{article['title']}**\n\n"
+        f"👤 作者：{article.get('author', 'Unknown')}\n"
+        f"📅 發布：{article.get('published_at', 'Unknown')}\n"
+        f"🔗 連結：{article.get('url', '')}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 連線查看完整文章"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 閱讀全文", url=article.get("url", ""))],
+            [
+                InlineKeyboardButton(text="⬅️ 返回列表", callback_data=f"shared_feed_{owner_chat_id}_{feed_index}"),
+                InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back"),
+            ],
+        ]
+    )
+
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
 
 
 @router.callback_query(F.data.startswith("shared_feeds_"))
@@ -286,12 +336,11 @@ async def callback_shared_feeds_list(callback: types.CallbackQuery):
     lines = ["📚 **對方的訂閱列表：**\n"]
     buttons = []
     for i, feed in enumerate(feeds):
-        count = await db.get_articles_by_feed_count(owner_chat_id, feed["url"])
         title = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
-        lines.append(f"{i+1}. {title} ({count} 篇)")
+        lines.append(f"{i+1}. {title}")
         buttons.append(
             [InlineKeyboardButton(
-                text=f"📰 {title} ({count})",
+                text=f"📰 {title}",
                 callback_data=f"shared_feed_{owner_chat_id}_{i}"
             )]
         )
@@ -300,116 +349,4 @@ async def callback_shared_feeds_list(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await callback.message.edit_text("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("shared_page_"))
-async def callback_shared_page(callback: types.CallbackQuery):
-    parts = callback.data.split("_")
-    owner_chat_id = int(parts[2])
-    feed_index = int(parts[3])
-    page = int(parts[4])
-
-    feeds = await db.get_feeds(owner_chat_id)
-    if feed_index >= len(feeds):
-        await callback.message.edit_text("⚠️ 來源不存在", reply_markup=back_button())
-        await callback.answer()
-        return
-
-    feed = feeds[feed_index]
-    feed_url = feed["url"]
-    per_page = 5
-
-    articles = await db.get_articles_by_feed(owner_chat_id, feed_url, limit=per_page, offset=page * per_page)
-    total = await db.get_articles_by_feed_count(owner_chat_id, feed_url)
-    title = feed.get("title") or feed_url.split("//")[-1].split(".")[0]
-
-    lines = [f"📚 **{title}** （共 {total} 篇，第 {page+1} 頁）\n"]
-    buttons = []
-    for article in articles:
-        date = article.get("published_at", "")[:10] if article.get("published_at") else ""
-        summary_preview = ""
-        if article.get("summary"):
-            summary_preview = f"\n   📝 {article['summary'][:60]}..."
-        lines.append(f"🆔 `{article['id']}` - {article['title']}")
-        if date:
-            lines.append(f"   📅 {date}{summary_preview}\n")
-        else:
-            lines.append(f"   {summary_preview}\n")
-        buttons.append(
-            [InlineKeyboardButton(
-                text=f"📄 {article['title'][:35]}...",
-                callback_data=f"shared_article_{owner_chat_id}_{article['id']}"
-            )]
-        )
-
-    nav_buttons = []
-    if page > 0:
-        nav_buttons.append(
-            InlineKeyboardButton(text="⬅️ 上一頁", callback_data=f"shared_page_{owner_chat_id}_{feed_index}_{page-1}")
-        )
-    if total > (page + 1) * per_page:
-        nav_buttons.append(
-            InlineKeyboardButton(text="➡️ 下一頁", callback_data=f"shared_page_{owner_chat_id}_{feed_index}_{page+1}")
-        )
-    if nav_buttons:
-        buttons.append(nav_buttons)
-
-    buttons.append([InlineKeyboardButton(text="🔙 返回列表", callback_data=f"shared_feeds_{owner_chat_id}")])
-    buttons.append([InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back")])
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-
-    await callback.message.edit_text("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("shared_article_"))
-async def callback_shared_article(callback: types.CallbackQuery):
-    parts = callback.data.split("_")
-    owner_chat_id = int(parts[2])
-    article_id = int(parts[3])
-
-    article = await db.get_article_by_id(article_id)
-    if not article:
-        await callback.message.edit_text("⚠️ 找不到這篇文章", reply_markup=back_button())
-        await callback.answer()
-        return
-
-    text = (
-        f"📄 **{article['title']}**\n\n"
-        f"👤 作者：{article.get('author', 'Unknown')}\n"
-        f"📅 發布：{article.get('published_at', 'Unknown')}\n"
-        f"🔗 連結：{article.get('url', '')}\n\n"
-    )
-
-    if article.get("summary"):
-        text += (
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"📝 **AI 摘要：**\n\n"
-            f"{article['summary']}"
-        )
-    else:
-        text += "📝 摘要尚未生成"
-
-    feed_url = article.get("feed_url", "")
-    feeds = await db.get_feeds(owner_chat_id)
-    feed_index = 0
-    for i, f in enumerate(feeds):
-        if f["url"] == feed_url:
-            feed_index = i
-            break
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⬅️ 返回列表", callback_data=f"shared_feed_{owner_chat_id}_{feed_index}"),
-                InlineKeyboardButton(text="🏠 主選單", callback_data="menu_back"),
-            ],
-        ]
-    )
-
-    try:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
-    except Exception:
-        await callback.message.edit_text(text, reply_markup=keyboard, disable_web_page_preview=True)
     await callback.answer()

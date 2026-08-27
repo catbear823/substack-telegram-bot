@@ -2,6 +2,7 @@ from aiogram import Router, types
 from aiogram.filters import Command
 
 import database as db
+from substack_fetcher import fetch_feed
 from summarizer import answer_question
 
 router = Router()
@@ -20,25 +21,36 @@ async def cmd_ask(message: types.Message):
 
     question = args[1].strip()
 
-    articles = await db.get_articles(message.chat.id, limit=30)
-    if not articles:
+    feeds = await db.get_feeds(message.chat.id)
+    if not feeds:
         await message.answer(
-            "📭 目前沒有已抓取的文章\n\n"
-            "請先使用 /fetch 抓取文章，然後再提問"
+            "📭 目前沒有訂閱任何來源\n\n"
+            "請先使用 /add 新增 Substack 訂閱"
         )
         return
 
-    relevant = await db.search_articles(message.chat.id, question, limit=5)
-    if not relevant:
-        relevant = articles[:5]
+    status_msg = await message.answer("🔄 正在抓取文章並分析...")
 
-    status_msg = await message.answer("🔄 正在分析文章並回答你的問題...")
+    all_articles = []
+    for feed in feeds:
+        try:
+            articles = await fetch_feed(feed["url"])
+            for article in articles[:5]:
+                article["feed_title"] = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
+                all_articles.append(article)
+        except Exception:
+            continue
+
+    if not all_articles:
+        await status_msg.edit_text("📭 無法抓取到任何文章\n\n請稍後再試")
+        return
+
+    relevant = all_articles[:10]
 
     history = await db.get_conversation_history(message.chat.id, limit=6)
     answer = await answer_question(question, relevant, history)
 
-    await db.add_conversation(message.chat.id, "user", question,
-                              ",".join(str(a["id"]) for a in relevant))
+    await db.add_conversation(message.chat.id, "user", question)
     await db.add_conversation(message.chat.id, "assistant", answer)
 
     source_lines = []
