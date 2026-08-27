@@ -1,12 +1,7 @@
 import asyncio
 from openai import OpenAI
 
-from config import OPENROUTER_API_KEY, LLM_MODEL, LLM_FALLBACK_MODEL
-
-client = OpenAI(
-    api_key=OPENROUTER_API_KEY,
-    base_url="https://openrouter.ai/api/v1",
-)
+from config import OPENROUTER_API_KEY, LLM_MODEL, LLM_FALLBACK_MODEL, GLM_API_KEY, GLM_MODEL
 
 SYSTEM_PROMPT = """你是一個專業的 Substack 文章摘要助手。你的工作是：
 1. 為文章生成簡潔、有重點的中文摘要
@@ -21,7 +16,26 @@ SYSTEM_PROMPT = """你是一個專業的 Substack 文章摘要助手。你的工
 - 引用文章時標明出處"""
 
 
-def _chat_sync(messages: list[dict], model: str, temperature: float = 0.3, max_tokens: int = 1024) -> str:
+def _get_openrouter_client():
+    return OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+    )
+
+
+def _get_glm_client():
+    return OpenAI(
+        api_key=GLM_API_KEY,
+        base_url="https://open.bigmodel.cn/api/paas/v4/",
+    )
+
+
+def _chat_sync(messages: list[dict], model: str, temperature: float = 0.3, max_tokens: int = 1024, use_glm: bool = False) -> str:
+    if use_glm:
+        client = _get_glm_client()
+    else:
+        client = _get_openrouter_client()
+
     response = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -37,19 +51,33 @@ def _chat_sync(messages: list[dict], model: str, temperature: float = 0.3, max_t
 
 
 async def _chat(messages: list[dict], temperature: float = 0.3, max_tokens: int = 1024) -> str:
-    try:
-        result = await asyncio.to_thread(_chat_sync, messages, LLM_MODEL, temperature, max_tokens)
-        if result:
-            return result
-    except Exception:
-        pass
+    if GLM_API_KEY:
+        try:
+            result = await asyncio.to_thread(
+                _chat_sync, messages, GLM_MODEL, temperature, max_tokens, True
+            )
+            if result:
+                return result
+        except Exception as e:
+            print(f"GLM error: {e}")
 
     try:
-        result = await asyncio.to_thread(_chat_sync, messages, LLM_FALLBACK_MODEL, temperature, max_tokens)
+        result = await asyncio.to_thread(
+            _chat_sync, messages, LLM_MODEL, temperature, max_tokens, False
+        )
         if result:
             return result
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"OpenRouter error: {e}")
+
+    try:
+        result = await asyncio.to_thread(
+            _chat_sync, messages, LLM_FALLBACK_MODEL, temperature, max_tokens, False
+        )
+        if result:
+            return result
+    except Exception as e:
+        print(f"OpenRouter fallback error: {e}")
 
     return ""
 
@@ -147,7 +175,7 @@ async def generate_digest(articles: list[dict]) -> str:
         },
     ]
 
-    try:
-        return await _chat(messages, temperature=0.4, max_tokens=1024)
-    except Exception as e:
-        return f"摘要生成失敗：{str(e)}"
+    result = await _chat(messages, temperature=0.4, max_tokens=1024)
+    if not result:
+        return "⚠️ 無法生成摘要（AI 服務暫時不可用）"
+    return result
