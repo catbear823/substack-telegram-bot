@@ -22,7 +22,7 @@ def back_button() -> InlineKeyboardMarkup:
 @router.callback_query(F.data == "menu_back")
 async def callback_back(callback: types.CallbackQuery):
     text = "📋 主選單\n\n點擊按鈕執行操作："
-    await callback.message.edit_text(text, reply_markup=get_main_menu_keyboard())
+    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
     await callback.answer()
 
 
