@@ -1,12 +1,39 @@
 from aiogram import Router, types
 from aiogram.filters import Command
 import re
+import httpx
 
 import database as db
 
 router = Router()
 
-URL_PATTERN = re.compile(r"https?://[^\s]+\.substack\.com[/feed]*")
+
+def is_valid_substack_url(url: str) -> bool:
+    patterns = [
+        r"https?://[^\s]+\.substack\.com",
+        r"https?://substack\.com/@[^\s]+",
+    ]
+    return any(re.search(p, url) for p in patterns)
+
+
+async def resolve_substack_url(url: str) -> str:
+    if "substack.com/@" in url:
+        username = url.split("substack.com/@")[-1].strip("/")
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"https://substack.com/@{username}",
+                    follow_redirects=True,
+                    headers={"User-Agent": "SubstackBot/1.0"},
+                )
+                text = resp.text
+                match = re.search(r'https://([a-zA-Z0-9-]+)\.substack\.com', text)
+                if match:
+                    return f"https://{match.group(1)}.substack.com"
+        except Exception:
+            pass
+        return f"https://{username}.substack.com"
+    return url
 
 
 @router.message(Command("add"))
@@ -15,31 +42,41 @@ async def cmd_add(message: types.Message):
     if len(args) < 2:
         await message.answer(
             "請提供 Substack 網址\n"
-            "格式：/add https://example.substack.com"
+            "格式：/add https://example.substack.com\n"
+            "或：/add https://substack.com/@username"
         )
         return
 
     url = args[1].strip()
-    if not URL_PATTERN.search(url):
-        await message.answer("⚠️ 請提供有效的 Substack 網址（以 .substack.com 結尾）")
+    if not is_valid_substack_url(url):
+        await message.answer(
+            "⚠️ 請提供有效的 Substack 網址\n\n"
+            "支援格式：\n"
+            "• https://example.substack.com\n"
+            "• https://substack.com/@username"
+        )
         return
 
     if not url.startswith("http"):
         url = "https://" + url
 
+    status_msg = await message.answer("🔄 正在解析網址...")
+    url = await resolve_substack_url(url)
+
     existing = await db.get_feeds(message.chat.id)
     if any(f["url"].rstrip("/") == url.rstrip("/") for f in existing):
-        await message.answer("⚠️ 這個來源已經在訂閱列表中了")
+        await status_msg.edit_text("⚠️ 這個來源已經在訂閱列表中了")
         return
 
-    success = await db.add_feed(message.chat.id, url, title=url.split("//")[-1].split(".")[0])
+    title = url.split("//")[-1].split(".")[0]
+    success = await db.add_feed(message.chat.id, url, title=title)
     if success:
-        await message.answer(
+        await status_msg.edit_text(
             f"✅ 已新增訂閱：\n{url}\n\n"
             "使用 /fetch 開始抓取最新文章"
         )
     else:
-        await message.answer("❌ 新增失敗，請稍後再試")
+        await status_msg.edit_text("❌ 新增失敗，請稍後再試")
 
 
 @router.message(Command("remove"))
@@ -69,7 +106,6 @@ async def cmd_list(message: types.Message):
 
     lines = ["📚 **你的訂閱列表：**\n"]
     for i, feed in enumerate(feeds, 1):
-        article_count = 0
         all_articles = await db.get_articles(message.chat.id, limit=1000)
         article_count = sum(1 for a in all_articles if a["feed_url"] == feed["url"])
         lines.append(f"{i}. {feed['url']}")
