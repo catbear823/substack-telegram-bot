@@ -13,6 +13,7 @@ from handlers import (
     summary_router,
     ask_router,
     schedule_router,
+    callback_router,
 )
 
 
@@ -36,6 +37,7 @@ async def main():
     dp.include_router(summary_router)
     dp.include_router(ask_router)
     dp.include_router(schedule_router)
+    dp.include_router(callback_router)
 
     logging.info("Bot starting...")
     await dp.start_polling(bot)
