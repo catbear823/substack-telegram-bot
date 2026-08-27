@@ -1,10 +1,13 @@
 from aiogram import Router, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
 
 import database as db
 from substack_fetcher import fetch_all_feeds, fetch_feed
 from summarizer import summarize_article, answer_question
 from handlers.start import get_main_menu_keyboard
+from handlers.feeds import AddFeedState
+from handlers.ask import AskState
 
 router = Router()
 
@@ -217,7 +220,8 @@ async def callback_view_article(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "menu_ask")
-async def callback_ask_prompt(callback: types.CallbackQuery):
+async def callback_ask_prompt(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(AskState.waiting_for_question)
     text = (
         "❓ **提問功能**\n\n"
         "請直接輸入你的問題，例如：\n"
@@ -231,7 +235,8 @@ async def callback_ask_prompt(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "menu_add")
-async def callback_add_prompt(callback: types.CallbackQuery):
+async def callback_add_prompt(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(AddFeedState.waiting_for_url)
     text = (
         "➕ **新增訂閱**\n\n"
         "請直接輸入 Substack 網址，格式：\n"

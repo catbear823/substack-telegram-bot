@@ -1,5 +1,8 @@
-from aiogram import Router, types
+from aiogram import Router, F
+from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
 import database as db
 from substack_fetcher import fetch_feed
@@ -8,19 +11,11 @@ from summarizer import answer_question
 router = Router()
 
 
-@router.message(Command("ask"))
-async def cmd_ask(message: types.Message):
-    args = message.text.split(maxsplit=1)
-    if len(args) < 2 or not args[1].strip():
-        await message.answer(
-            "請提供你的問題\n"
-            "格式：/ask <你的問題>\n\n"
-            "例如：/ask 最近的文章討論了什麼主題？"
-        )
-        return
+class AskState(StatesGroup):
+    waiting_for_question = State()
 
-    question = args[1].strip()
 
+async def process_question(message: Message, question: str):
     feeds = await db.get_feeds(message.chat.id)
     if not feeds:
         await message.answer(
@@ -72,3 +67,26 @@ async def cmd_ask(message: types.Message):
         await status_msg.edit_text(text, parse_mode="Markdown", disable_web_page_preview=True)
     except Exception:
         await status_msg.edit_text(text, disable_web_page_preview=True)
+
+
+@router.message(Command("ask"))
+async def cmd_ask(message: Message, state: FSMContext):
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2 or not args[1].strip():
+        await state.set_state(AskState.waiting_for_question)
+        await message.answer(
+            "請提供你的問題\n"
+            "格式：/ask <你的問題>\n\n"
+            "例如：/ask 最近的文章討論了什麼主題？"
+        )
+        return
+
+    question = args[1].strip()
+    await process_question(message, question)
+
+
+@router.message(AskState.waiting_for_question, F.text)
+async def handle_ask_question(message: Message, state: FSMContext):
+    await state.clear()
+    question = message.text.strip()
+    await process_question(message, question)
