@@ -45,12 +45,11 @@ async def cmd_start(message: types.Message):
             lines = ["📚 **對方的訂閱列表：**\n"]
             buttons = []
             for i, feed in enumerate(feeds):
-                count = await db.get_articles_by_feed_count(owner_chat_id, feed["url"])
                 title = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
-                lines.append(f"{i+1}. {title} ({count} 篇)")
+                lines.append(f"{i+1}. {title}")
                 buttons.append(
                     [InlineKeyboardButton(
-                        text=f"📰 {title} ({count})",
+                        text=f"📰 {title}",
                         callback_data=f"shared_feed_{owner_chat_id}_{i}"
                     )]
                 )
@@ -65,8 +64,7 @@ async def cmd_start(message: types.Message):
         "👋 你好！我是 Substack 閱讀助手 Bot\n\n"
         "我可以幫你：\n"
         "📰 追蹤 Substack Newsletter\n"
-        "📝 自動生成文章摘要\n"
-        "❓ 針對文章內容回答問題\n\n"
+        "📝 自動生成文章摘要\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "👇 點擊下方按鈕開始使用："
     )
