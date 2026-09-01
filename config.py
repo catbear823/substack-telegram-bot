@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-BOT_USERNAME = "Substack_TTT_bot"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 LLM_MODEL = os.getenv("LLM_MODEL", "openrouter/free")
 LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "deepseek/deepseek-chat-v3-0324:free")

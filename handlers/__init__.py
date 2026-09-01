@@ -5,8 +5,6 @@ from .summary import router as summary_router
 from .ask import router as ask_router
 from .schedule import router as schedule_router
 from .callback import router as callback_router
-from .share import router as share_router
-
 __all__ = [
     "start_router",
     "feeds_router",
@@ -15,5 +13,4 @@ __all__ = [
     "ask_router",
     "schedule_router",
     "callback_router",
-    "share_router",
 ]

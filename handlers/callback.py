@@ -41,7 +41,6 @@ async def callback_help(callback: types.CallbackQuery):
         "• https://substack.com/@username\n\n"
         "**指令格式：**\n"
         "• /add <url> - 新增訂閱\n"
-        "• /share - 分享訂閱列表\n"
     )
     await callback.message.edit_text(text, reply_markup=back_button(), parse_mode="Markdown")
     await callback.answer()

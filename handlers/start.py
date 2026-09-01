@@ -2,8 +2,6 @@ from aiogram import Router, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-import database as db
-
 router = Router()
 
 
@@ -23,7 +21,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📖 使用說明", callback_data="menu_help"),
-            InlineKeyboardButton(text="🔗 分享訂閱", callback_data="menu_share"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -31,35 +28,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
-    args = message.text.split(maxsplit=1)
-    if len(args) >= 2 and args[1].strip():
-        share_code = args[1].strip()
-        owner_chat_id = await db.get_owner_by_share_code(share_code)
-
-        if owner_chat_id and owner_chat_id != message.chat.id:
-            feeds = await db.get_feeds(owner_chat_id)
-            if not feeds:
-                await message.answer("📭 此用戶目前沒有訂閱任何來源")
-                return
-
-            lines = ["📚 **對方的訂閱列表：**\n"]
-            buttons = []
-            for i, feed in enumerate(feeds):
-                title = feed.get("title") or feed["url"].split("//")[-1].split(".")[0]
-                lines.append(f"{i+1}. {title}")
-                buttons.append(
-                    [InlineKeyboardButton(
-                        text=f"📰 {title}",
-                        callback_data=f"shared_feed_{owner_chat_id}_{i}"
-                    )]
-                )
-
-            buttons.append([InlineKeyboardButton(text="🔙 返回主選單", callback_data="menu_back")])
-            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-
-            await message.answer("\n".join(lines), reply_markup=keyboard, parse_mode="Markdown")
-            return
-
     text = (
         "👋 你好！我是 Substack 閱讀助手 Bot\n\n"
         "我可以幫你：\n"
