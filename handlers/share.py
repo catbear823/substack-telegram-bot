@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import database as db
 from substack_fetcher import fetch_feed
+from config import BOT_USERNAME
 
 router = Router()
 
@@ -29,9 +30,7 @@ async def cmd_share(message: types.Message):
     existing = await db.get_shared_feeds(message.chat.id)
     if existing:
         share_code = existing["share_code"]
-        bot_info = await message.bot.get_me()
-        bot_username = bot_info.username
-        link = f"https://t.me/{bot_username}?start={share_code}"
+        link = f"https://t.me/{BOT_USERNAME}?start={share_code}"
 
         text = (
             "🔗 **你的分享連結**\n\n"
@@ -53,9 +52,7 @@ async def cmd_share(message: types.Message):
         share_code = secrets.token_urlsafe(8)
         await db.create_shared_feed(message.chat.id, share_code, max_uses)
 
-        bot_info = await message.bot.get_me()
-        bot_username = bot_info.username
-        link = f"https://t.me/{bot_username}?start={share_code}"
+        link = f"https://t.me/{BOT_USERNAME}?start={share_code}"
 
         uses_text = f"（僅限 {max_uses} 次使用）" if max_uses > 0 else "（不限次數）"
         text = (
@@ -83,9 +80,7 @@ async def callback_menu_share(callback: types.CallbackQuery):
     existing = await db.get_shared_feeds(callback.message.chat.id)
     if existing:
         share_code = existing["share_code"]
-        bot_info = await callback.bot.get_me()
-        bot_username = bot_info.username
-        link = f"https://t.me/{bot_username}?start={share_code}"
+        link = f"https://t.me/{BOT_USERNAME}?start={share_code}"
 
         text = (
             "🔗 **你的分享連結**\n\n"
@@ -107,9 +102,7 @@ async def callback_menu_share(callback: types.CallbackQuery):
         share_code = secrets.token_urlsafe(8)
         await db.create_shared_feed(callback.message.chat.id, share_code)
 
-        bot_info = await callback.bot.get_me()
-        bot_username = bot_info.username
-        link = f"https://t.me/{bot_username}?start={share_code}"
+        link = f"https://t.me/{BOT_USERNAME}?start={share_code}"
 
         text = (
             "🔗 **分享功能已啟用**\n\n"
@@ -140,9 +133,7 @@ async def callback_share_regenerate(callback: types.CallbackQuery):
     share_code = secrets.token_urlsafe(8)
     await db.create_shared_feed(callback.message.chat.id, share_code, max_uses)
 
-    bot_info = await callback.bot.get_me()
-    bot_username = bot_info.username
-    link = f"https://t.me/{bot_username}?start={share_code}"
+    link = f"https://t.me/{BOT_USERNAME}?start={share_code}"
 
     uses_text = f"（僅限 {max_uses} 次使用）" if max_uses > 0 else "（不限次數）"
     text = (
